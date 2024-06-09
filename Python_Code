@@ -1,1 +1,63 @@
+import serial
+import matplotlib.pyplot as plt
 
+# Define the serial port and baud rate
+serial_port = 'COM6'  # Change 'COM6' to match Arduino's port
+baud_rate = 9600
+
+# Initialize serial connection
+ser = serial.Serial(serial_port, baud_rate)
+
+# Initialize empty lists to store stress and strain data
+stress_data = []
+strain_data = []
+
+# Initialize plot
+plt.ion()
+fig, ax = plt.subplots()
+ax.set_xlabel('strain')
+
+ax.set_ylabel('stress')
+line_stress, = ax.plot(stress_data, strain_data, 'o-', label='Stress')
+# line_strain, = ax.plot(stress_data, strain_data, 'o-', label='Strain')
+ax.legend()
+
+def update_plot():
+    line_stress.set_xdata(strain_data)
+    line_stress.set_ydata(stress_data)
+    '''
+    line_strain.set_xdata(range(len(strain_data)))
+    line_strain.set_ydata(strain_data)'''
+    ax.relim()
+    ax.autoscale_view()
+    plt.pause(0.01)
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+
+try:
+    while True:
+        # Read data from the serial port
+        line = ser.readline().decode().strip()  # Decode bytes to string and remove leading/trailing whitespace
+        
+        # Split data into stress and strain
+        try:
+            label, value = line.split(':')
+            value = float(value)
+            if label == 'Stress':
+                stress_data.append(value)
+            elif label == 'Strain':
+                strain_data.append(value)
+        except ValueError:
+            pass
+        
+        # Update plot
+        update_plot()
+
+except KeyboardInterrupt:
+    # Close the serial connection when Ctrl+C is pressed
+    ser.close()
+    print("\nSerial connection closed.")
+
+# Show the plot window
+plt.ioff()
+plt.show()
