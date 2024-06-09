@@ -2,7 +2,7 @@ import serial
 import matplotlib.pyplot as plt
 
 # Define the serial port and baud rate
-serial_port = 'COM6'  # Change 'COM6' to match Arduino's port
+serial_port = 'COM6'  # Change 'COM6' to match your Arduino's port
 baud_rate = 9600
 
 # Initialize serial connection
