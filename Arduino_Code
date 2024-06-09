@@ -1,1 +1,108 @@
+#include "HX711_ADC.h"
+
+// Motor control pins
+const int ENA = 2; 
+const int IN1 = 3;  
+const int IN2 = 4; 
+
+// Load cell pins
+#define LOAD_CELL_DOUT_PIN 6
+#define LOAD_CELL_SCK_PIN 5
+
+HX711_ADC LoadCell(LOAD_CELL_DOUT_PIN, LOAD_CELL_SCK_PIN);
+float NEGLIGIBLE_LOAD_THRESHOLD = 5.4;  // Threshold for negligible load
+
+// Dial gauge pins
+int clockPin = 7;
+int dataPin = 8;
+
+// Clock value variables
+int clockNow = 0;
+int lastClock = 0;
+unsigned long lastRisingReadTime = 0;  // Last time a rising clock edge was read
+bool startNewSecuence = true;  // Flag to start a new sequence reading
+char secuenceString[16];  // String to save the measures
+int secuenceIndex = 0;  // Index for the sequence
+
+void setup() {
+  Serial.begin(19200);
+
+  // Initialize the load cell
+  LoadCell.begin();
+  LoadCell.start(2000);  // Set the offset in grams by adjusting the calibration factor
+  
+  // Initialize pins
+  pinMode(clockPin, INPUT);
+  pinMode(dataPin, INPUT);
+  pinMode(ENA, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+}
+
+void loop() {
+  lastClock = clockNow;
+  clockNow = digitalRead(clockPin);
+
+  // Check for rising edge of the clock signal
+  if (lastClock == 0 && clockNow == 1) {
+    // If the time since the last rising edge is more than 1000 microseconds, start a new sequence
+    if (micros() - lastRisingReadTime > 1000) {
+      startNewSecuence = true;
+    }
+
+    if (startNewSecuence) {
+      // Update the load cell reading
+      if (LoadCell.update()) {
+        float weight = LoadCell.getData();
+        float p = (((((weight / 1000) - 0.052) / 20.944 + 0.50) * 10000) / 0.785);
+        
+        // Print the stress value
+        Serial.print("Stress: ");
+        Serial.print(p);
+        delay(15);
+
+        // Check for negligible load and control the motor accordingly
+        if (p <= NEGLIGIBLE_LOAD_THRESHOLD) {
+          // Stop the motor
+          digitalWrite(ENA, LOW);
+          digitalWrite(IN1, LOW);
+          digitalWrite(IN2, LOW);
+        } else {
+          // Run the motor
+          digitalWrite(ENA, HIGH);
+          digitalWrite(IN1, HIGH);  // Set direction as needed
+          digitalWrite(IN2, LOW);   // Set direction as needed
+
+          // Convert the binary string to decimal
+          long secuenceDecimal = strtol(secuenceString, NULL, 2);
+          Serial.print("   Strain: ");
+          Serial.println(12 * secuenceDecimal);
+          secuenceIndex = 0;
+          startNewSecuence = false;
+        }
+
+        // Read data pin twice to avoid glitches
+        int data = digitalRead(dataPin) + digitalRead(dataPin);
+
+        // Invert the order and store in the sequence string
+        if (secuenceIndex > 0 && (16 - secuenceIndex) >= 0) {
+          if (data > 1) {
+            secuenceString[16 - secuenceIndex] = '0';
+          } else {
+            secuenceString[16 - secuenceIndex] = '1';
+          }
+        }
+
+        secuenceIndex++;
+        lastRisingReadTime = micros();  // Update the last rising read time
+      }
+    }
+  }
+
+  // If more than 100ms have passed, reset the measure variables
+  if (micros() - lastRisingReadTime > 100000) {
+    secuenceIndex = 0;
+    startNewSecuence = true;
+  }
+}
 
